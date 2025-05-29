@@ -7,7 +7,6 @@ import { StoryPage } from './StoryPage';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Input } from './ui/input';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
 import liblibService from '../services/liblibService';
@@ -109,7 +108,7 @@ export function StoryContainer() {
         console.log('签名生成成功:', signatureResult);
       } catch (signError) {
         console.error('❌ 签名生成失败:', signError);
-        alert('❌ 签名生成失败！\n\n错误信息:\n' + signError.message);
+        alert('❌ 签名生成失败！\n\n错误信息:\n' + (signError instanceof Error ? signError.message : String(signError)));
         return;
       }
 
@@ -134,11 +133,11 @@ export function StoryContainer() {
 
     } catch (error) {
       console.error('❌ API测试失败:', error);
-      console.error('错误堆栈:', error.stack);
+      console.error('错误堆栈:', error instanceof Error ? error.stack : 'No stack trace');
 
       let errorMessage = '❌ API测试失败！\n\n';
 
-      if (error.message.includes('Failed to fetch')) {
+      if (error instanceof Error && error.message.includes('Failed to fetch')) {
         errorMessage += '错误类型: 网络请求失败 (Failed to fetch)\n';
         errorMessage += '这通常表示:\n';
         errorMessage += '- 浏览器无法连接到API服务器\n';
@@ -149,14 +148,14 @@ export function StoryContainer() {
         errorMessage += '- 请检查浏览器开发者工具的Network标签\n';
         errorMessage += '- 查看是否有CORS错误\n';
         errorMessage += '- 确认API服务器地址是否正确';
-      } else if (error.message.includes('密钥')) {
+      } else if (error instanceof Error && error.message.includes('密钥')) {
         errorMessage += '错误类型: API密钥问题\n';
         errorMessage += '请检查.env文件中的API密钥配置';
-      } else if (error.message.includes('签名')) {
+      } else if (error instanceof Error && error.message.includes('签名')) {
         errorMessage += '错误类型: 签名生成问题\n';
         errorMessage += '可能是浏览器环境的加密API问题';
       } else {
-        errorMessage += '错误信息: ' + error.message + '\n\n';
+        errorMessage += '错误信息: ' + (error instanceof Error ? error.message : String(error)) + '\n\n';
         errorMessage += '完整错误: ' + JSON.stringify(error, null, 2);
       }
 

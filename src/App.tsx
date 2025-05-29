@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import React from 'react';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [StoryContainer, setStoryContainer] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [StoryContainer, setStoryContainer] = useState<React.ComponentType | null>(null);
 
   useEffect(() => {
     // 动态导入StoryContainer以捕获任何导入错误
@@ -16,7 +17,7 @@ function App() {
         setIsLoading(false);
       } catch (err) {
         console.error('加载StoryContainer失败:', err);
-        setError(err.message);
+        setError(err instanceof Error ? err.message : 'Unknown error');
         setIsLoading(false);
       }
     };
