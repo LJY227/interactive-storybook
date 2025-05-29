@@ -8,7 +8,22 @@ class LiblibService {
   constructor() {
     // LIBLIB API配置（基于官方文档）
     // 在开发环境中使用代理路径解决CORS问题
-    this.baseUrl = import.meta.env.DEV ? '/api/liblib' : 'https://openapi.liblibai.cloud';
+    // 在生产环境中使用CORS代理服务
+    if (import.meta.env.DEV) {
+      this.baseUrl = '/api/liblib';
+    } else {
+      // 生产环境使用CORS代理服务
+      // 使用多个备用代理服务
+      this.corsProxyUrls = [
+        'https://cors-anywhere.herokuapp.com/',
+        'https://api.allorigins.win/raw?url=',
+        'https://cors.bridged.cc/',
+        'https://thingproxy.freeboard.io/fetch/'
+      ];
+      this.corsProxyUrl = this.corsProxyUrls[0]; // 默认使用第一个
+      this.baseUrl = 'https://openapi.liblibai.cloud';
+    }
+
     this.textToImageEndpoint = '/api/generate/webui/text2img/ultra';
     this.imageToImageEndpoint = '/api/generate/webui/img2img/ultra';
     this.queryEndpoint = '/api/generate/webui/status';
@@ -28,9 +43,9 @@ class LiblibService {
     console.log('🔧 LiblibService初始化:', {
       isDev: import.meta.env.DEV,
       baseUrl: this.baseUrl,
-      mode: import.meta.env.DEV ? '开发模式(使用代理)' : '生产模式(直连)',
-      defaultReferenceImage: this.defaultReferenceImageUrl,
-      corsWarning: this.isProduction ? '⚠️ 生产环境可能遇到CORS问题' : '✅ 开发环境使用代理'
+      corsProxy: this.corsProxyUrl || '无',
+      mode: import.meta.env.DEV ? '开发模式(使用代理)' : '生产模式(使用CORS代理)',
+      defaultReferenceImage: this.defaultReferenceImageUrl
     });
   }
 
@@ -153,8 +168,8 @@ class LiblibService {
     const { signature, timestamp, signatureNonce } = await this.generateSignature(uri);
     const { accessKey } = this.getApiKeys();
 
-    // 使用URL参数方式传递认证信息（按照官方示例）
-    const url = `${this.baseUrl}${uri}?AccessKey=${accessKey}&Signature=${signature}&Timestamp=${timestamp}&SignatureNonce=${signatureNonce}`;
+    // 使用新的URL构建方法（支持CORS代理）
+    const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
 
     const requestBody = {
       templateUuid: this.templateUuid,
@@ -251,8 +266,8 @@ class LiblibService {
     const { signature, timestamp, signatureNonce } = await this.generateSignature(uri);
     const { accessKey } = this.getApiKeys();
 
-    // 使用URL参数方式传递认证信息（按照官方示例）
-    const url = `${this.baseUrl}${uri}?AccessKey=${accessKey}&Signature=${signature}&Timestamp=${timestamp}&SignatureNonce=${signatureNonce}`;
+    // 使用新的URL构建方法（支持CORS代理）
+    const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
 
     const requestBody = {
       generateUuid: generateUuid
@@ -349,6 +364,26 @@ class LiblibService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // 构建请求URL（支持CORS代理）
+  buildRequestUrl(endpoint, accessKey, signature, timestamp, signatureNonce) {
+    const fullUrl = `${this.baseUrl}${endpoint}?AccessKey=${accessKey}&Signature=${signature}&Timestamp=${timestamp}&SignatureNonce=${signatureNonce}`;
+
+    if (this.isProduction && this.corsProxyUrl) {
+      // 在生产环境中使用CORS代理
+      console.log('🌐 使用CORS代理:', this.corsProxyUrl);
+
+      // 根据不同的代理服务使用不同的URL格式
+      if (this.corsProxyUrl.includes('allorigins.win')) {
+        return `${this.corsProxyUrl}${encodeURIComponent(fullUrl)}`;
+      } else {
+        // 对于其他代理服务，直接拼接
+        return `${this.corsProxyUrl}${fullUrl}`;
+      }
+    }
+
+    return fullUrl;
+  }
+
   // 图生图功能（基于参考图像生成）
   async generateImageFromImage(referenceImageUrl, prompt, ageRange) {
     try {
@@ -356,13 +391,11 @@ class LiblibService {
         throw new Error('LIBLIB API密钥未初始化，请先调用initializeApiKeys()');
       }
 
-      // 在生产环境中提供备用方案
-      if (this.isProduction) {
-        console.warn('⚠️ 生产环境检测到，LibLibAI API可能因CORS策略无法直接调用');
-        console.warn('💡 使用备用图片生成方案');
-
-        // 返回一个基于用户输入的预设图片
-        return this.getFallbackImage(prompt, ageRange);
+      // 移除生产环境的备用方案，尝试使用CORS代理
+      console.log('🚀 尝试使用LibLibAI API生成图片...');
+      console.log('🌍 环境:', this.isProduction ? '生产环境' : '开发环境');
+      if (this.isProduction && this.corsProxyUrl) {
+        console.log('🔧 使用CORS代理服务:', this.corsProxyUrl);
       }
 
       // 如果没有提供参考图片URL，使用默认的page1.png
@@ -473,8 +506,8 @@ class LiblibService {
     const { signature, timestamp, signatureNonce } = await this.generateSignature(uri);
     const { accessKey } = this.getApiKeys();
 
-    // 使用URL参数方式传递认证信息（按照官方示例）
-    const url = `${this.baseUrl}${uri}?AccessKey=${accessKey}&Signature=${signature}&Timestamp=${timestamp}&SignatureNonce=${signatureNonce}`;
+    // 使用新的URL构建方法（支持CORS代理）
+    const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
 
     const requestBody = {
       templateUuid: this.img2imgTemplateUuid, // 使用图生图专用模板UUID
