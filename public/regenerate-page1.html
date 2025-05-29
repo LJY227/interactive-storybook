@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>重新生成第一页插画</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        .story-content {
+            background: #f9f9f9;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .url-display {
+            background: #e8f5e8;
+            border: 1px solid #28a745;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 重新生成第一页插画</h1>
+        <p>使用LIBLIB AI的Text2Image功能重新生成《小熊波波的友谊冒险》第一页插画。</p>
+        
+        <div class="story-content">
+            <h3>📖 第一页故事内容</h3>
+            <p><strong>波波是一只住在森林里的小棕熊。他有一双好奇的大眼睛和一颗善良的心。每天早晨，波波都会坐在自己的小木屋前，望着远处的大树和花朵，但他从来不敢走得太远。</strong></p>
+        </div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <button id="regenerateBtn" onclick="regeneratePage1()">🎨 重新生成第一页插画</button>
+            <button onclick="clearResults()">🗑️ 清除结果</button>
+        </div>
+        
+        <div id="status"></div>
+        <div id="log" class="log" style="display: none;"></div>
+        <div id="result"></div>
+    </div>
+
+    <script type="module">
+        // 第一页的故事内容
+        const PAGE_1_CONTENT = "波波是一只住在森林里的小棕熊。他有一双好奇的大眼睛和一颗善良的心。每天早晨，波波都会坐在自己的小木屋前，望着远处的大树和花朵，但他从来不敢走得太远。";
+
+        // 日志函数
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.style.display = 'block';
+            logDiv.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        // 显示状态
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = message;
+        }
+
+        // 清除结果
+        window.clearResults = function() {
+            document.getElementById('result').innerHTML = '';
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('log').style.display = 'none';
+            showStatus('结果已清除', 'info');
+        };
+
+        // 构建第一页专用提示词
+        function buildPage1Prompt() {
+            return "a cute brown bear named Bobo with big curious eyes, round face, small black nose, warm brown fur, kind and gentle expression, sitting in front of a small wooden house in the forest, looking at distant trees and flowers, morning sunlight filtering through leaves, children's watercolor illustration style, warm and friendly colors, soft gentle tones, clear outlines, designed for children aged 6-8, cozy and peaceful atmosphere, warm browns and greens, beautiful wildflowers, tall forest trees, peaceful morning scene, slightly shy but curious mood, high quality children's book illustration";
+        }
+
+        // 重新生成第一页插画
+        window.regeneratePage1 = async function() {
+            const btn = document.getElementById('regenerateBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 正在重新生成...';
+            
+            try {
+                log('🎨 开始重新生成第一页插画');
+                showStatus('正在初始化...', 'info');
+                
+                // 导入liblibService
+                log('📦 导入liblibService模块');
+                const { default: liblibService } = await import('/src/services/liblibService.js');
+                log('✅ 模块导入成功');
+                
+                // 初始化API密钥
+                log('🔑 初始化API密钥');
+                const accessKey = 'VXlp-nUZOKSUC0bMSUqA_w';
+                const secretKey = 'vyJel3b6lcZPTmcybbZpQ2jdhvsWXQch';
+                
+                liblibService.initializeApiKeys(accessKey, secretKey);
+                log('✅ API密钥初始化成功');
+                
+                // 检查API状态
+                const apiStatus = liblibService.getApiStatus();
+                log('🔍 API状态检查完成');
+                log('   - 已初始化: ' + apiStatus.isInitialized);
+                log('   - 基础URL: ' + apiStatus.baseUrl);
+                log('   - 模板UUID: ' + apiStatus.templateUuid);
+                
+                if (!apiStatus.isInitialized) {
+                    throw new Error('API密钥初始化失败');
+                }
+                
+                showStatus('开始生成第一页插画...', 'warning');
+                
+                // 构建提示词
+                const prompt = buildPage1Prompt();
+                log('🔤 第一页专用提示词: ' + prompt);
+                log('📏 提示词长度: ' + prompt.length + ' 字符');
+                
+                showStatus('正在进行Text2Image生成，预计需要1-2分钟...', 'warning');
+                
+                const startTime = Date.now();
+                log('⏳ 开始调用Text2Image API');
+                log('🎯 使用参数: aspectRatio="square", imgCount=1, steps=30');
+                
+                // 使用Text2Image功能生成图片
+                const imageUrl = await liblibService.generateImage(prompt, '6-8岁');
+                
+                const endTime = Date.now();
+                const duration = Math.round((endTime - startTime) / 1000);
+                
+                log('🎉 第一页插画重新生成成功！');
+                log('🔗 图片URL: ' + imageUrl);
+                log('⏱️ 生成耗时: ' + duration + ' 秒');
+                
+                // 显示结果
+                showStatus('第一页插画重新生成成功！', 'success');
+                
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `
+                    <h3>🎉 第一页插画重新生成成功</h3>
+                    
+                    <div class="url-display">
+                        <h4>🔗 新生成的图片URL</h4>
+                        <p><strong>${imageUrl}</strong></p>
+                        <button onclick="navigator.clipboard.writeText('${imageUrl}')" style="font-size: 12px; padding: 5px 10px;">📋 复制URL</button>
+                        <a href="${imageUrl}" target="_blank" style="margin-left: 10px; font-size: 12px;">🔗 在新窗口打开</a>
+                    </div>
+                    
+                    <div style="margin: 20px 0;">
+                        <h4>🖼️ 插画预览</h4>
+                        <img src="${imageUrl}" alt="第一页插画" class="result-image" onload="console.log('图片加载成功')" onerror="console.error('图片加载失败')">
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 15px 0;">
+                        <h4>📊 生成信息</h4>
+                        <p><strong>功能:</strong> Text2Image (文生图)</p>
+                        <p><strong>生成耗时:</strong> ${duration} 秒</p>
+                        <p><strong>生成时间:</strong> ${new Date().toLocaleString()}</p>
+                        <p><strong>图片尺寸:</strong> 1024x1024 (square)</p>
+                        <p><strong>服务:</strong> LIBLIB AI</p>
+                    </div>
+                    
+                    <div style="background: #e8f5e8; padding: 15px; border-radius: 4px; margin: 15px 0; border: 1px solid #28a745;">
+                        <h4>📝 更新storyData.ts的代码</h4>
+                        <p>将第1页的image字段更新为:</p>
+                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">image: "${imageUrl}"</pre>
+                        
+                        <p>或者完整的页面对象:</p>
+                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">{
+  id: 1,
+  content: "${PAGE_1_CONTENT}",
+  isInteractive: false,
+  image: "${imageUrl}"
+}</pre>
+                    </div>
+                `;
+                
+                // 保存结果到localStorage
+                const result = {
+                    pageId: 1,
+                    content: PAGE_1_CONTENT,
+                    prompt: prompt,
+                    imageUrl: imageUrl,
+                    generatedAt: new Date().toISOString(),
+                    duration: duration,
+                    service: 'LIBLIB AI Text2Image',
+                    parameters: {
+                        aspectRatio: 'square',
+                        imgCount: 1,
+                        steps: 30
+                    }
+                };
+                
+                localStorage.setItem('page1_regenerated_result', JSON.stringify(result));
+                log('💾 结果已保存到浏览器本地存储');
+                log('🎉 第一页插画重新生成完成！');
+                
+            } catch (error) {
+                log('❌ 第一页插画重新生成失败: ' + error.message);
+                console.error('详细错误:', error);
+                showStatus('重新生成失败: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎨 重新生成第一页插画';
+            }
+        };
+    </script>
+</body>
+</html>

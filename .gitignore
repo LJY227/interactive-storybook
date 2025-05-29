@@ -1,0 +1,109 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# API keys and sensitive data
+api_keys.txt
+secrets.json
+
+# Build outputs
+build/
+out/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+ehthumbs.db
+.Spotlight-V100
+.Trashes
+._*
+
+# SSL certificates (for local development)
+*.pem
+*.crt
+*.key
+cert.conf
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# Test files
+test-*.js
+test-*.html
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+
+# Generated files
+generate-cert.js
+
+# Duplicate files (moved to proper locations)
+deployment-guide.md
+DEPLOYMENT-README.md
+DEPLOYMENT-CHECKLIST.md
+FIXES-README.md
+
+# Root level script files (moved to scripts/)
+deploy.sh
+deploy.bat
+setup-https.sh
+setup-https.ps1
+organize-project.js
+
