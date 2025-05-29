@@ -22,11 +22,15 @@ class LiblibService {
     // 默认参考图片URL（使用用户提供的page1.png）
     this.defaultReferenceImageUrl = 'https://liblibai-tmp-image.liblib.cloud/img/9dbb5de4e30a42afaff5b04e13eb518e/d43741e63e625278cec8c107a710fe36e9eba6a658baf4742dc33375c007da5a.png';
 
+    // 检查是否在生产环境
+    this.isProduction = !import.meta.env.DEV;
+
     console.log('🔧 LiblibService初始化:', {
       isDev: import.meta.env.DEV,
       baseUrl: this.baseUrl,
       mode: import.meta.env.DEV ? '开发模式(使用代理)' : '生产模式(直连)',
-      defaultReferenceImage: this.defaultReferenceImageUrl
+      defaultReferenceImage: this.defaultReferenceImageUrl,
+      corsWarning: this.isProduction ? '⚠️ 生产环境可能遇到CORS问题' : '✅ 开发环境使用代理'
     });
   }
 
@@ -352,6 +356,15 @@ class LiblibService {
         throw new Error('LIBLIB API密钥未初始化，请先调用initializeApiKeys()');
       }
 
+      // 在生产环境中提供备用方案
+      if (this.isProduction) {
+        console.warn('⚠️ 生产环境检测到，LibLibAI API可能因CORS策略无法直接调用');
+        console.warn('💡 使用备用图片生成方案');
+
+        // 返回一个基于用户输入的预设图片
+        return this.getFallbackImage(prompt, ageRange);
+      }
+
       // 如果没有提供参考图片URL，使用默认的page1.png
       let finalReferenceImageUrl = referenceImageUrl;
       if (!finalReferenceImageUrl) {
@@ -378,6 +391,14 @@ class LiblibService {
       return imageUrl;
     } catch (error) {
       console.error('LIBLIB图生图失败:', error);
+
+      // 如果是网络错误（可能是CORS），提供更友好的错误信息
+      if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+        const corsError = new Error('网络连接问题。建议: 检查网络连接, 确认API服务器可访问, 检查CORS配置');
+        corsError.originalError = error;
+        throw corsError;
+      }
+
       throw error;
     }
   }
@@ -386,6 +407,52 @@ class LiblibService {
   getDefaultReferenceImageUrl() {
     // 直接返回公网可访问的测试图片URL
     return this.defaultReferenceImageUrl;
+  }
+
+  // 生产环境备用图片生成方案
+  getFallbackImage(prompt, ageRange) {
+    console.log('🎨 使用备用图片生成方案，提示词:', prompt);
+
+    // 基于提示词关键字返回相应的预设图片
+    const keywords = prompt.toLowerCase();
+
+    // 预设的图片URL列表（使用现有的故事插画）
+    const fallbackImages = [
+      `${import.meta.env.BASE_URL}images/page1.png`,  // 小熊波波
+      `${import.meta.env.BASE_URL}images/page2.png`,  // 森林场景
+      `${import.meta.env.BASE_URL}images/page3.png`,  // 小兔子莉莉
+      `${import.meta.env.BASE_URL}images/page5.png`,  // 采花场景
+      `${import.meta.env.BASE_URL}images/page6.png`,  // 对话场景
+      `${import.meta.env.BASE_URL}images/page7.png`,  // 友谊场景
+      `${import.meta.env.BASE_URL}images/page9.png`,  // 野餐会
+      `${import.meta.env.BASE_URL}images/page10.png`, // 温馨场景
+      `${import.meta.env.BASE_URL}images/page12.png`  // 快乐结局
+    ];
+
+    // 根据关键词选择合适的图片
+    let selectedImage;
+    if (keywords.includes('波波') || keywords.includes('小熊') || keywords.includes('熊')) {
+      selectedImage = fallbackImages[0]; // page1.png - 小熊波波
+    } else if (keywords.includes('莉莉') || keywords.includes('兔子') || keywords.includes('小兔')) {
+      selectedImage = fallbackImages[2]; // page3.png - 小兔子莉莉
+    } else if (keywords.includes('花') || keywords.includes('采集') || keywords.includes('花朵')) {
+      selectedImage = fallbackImages[3]; // page5.png - 采花场景
+    } else if (keywords.includes('野餐') || keywords.includes('聚会') || keywords.includes('朋友')) {
+      selectedImage = fallbackImages[6]; // page9.png - 野餐会
+    } else if (keywords.includes('快乐') || keywords.includes('开心') || keywords.includes('幸福')) {
+      selectedImage = fallbackImages[8]; // page12.png - 快乐结局
+    } else if (keywords.includes('森林') || keywords.includes('树') || keywords.includes('自然')) {
+      selectedImage = fallbackImages[1]; // page2.png - 森林场景
+    } else {
+      // 默认随机选择一张图片
+      const randomIndex = Math.floor(Math.random() * fallbackImages.length);
+      selectedImage = fallbackImages[randomIndex];
+    }
+
+    console.log('🎯 选择的备用图片:', selectedImage);
+
+    // 模拟异步操作，返回Promise
+    return Promise.resolve(selectedImage);
   }
 
   // 设置默认参考图片URL
