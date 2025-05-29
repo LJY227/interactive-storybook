@@ -13,14 +13,14 @@ class LiblibService {
       this.baseUrl = '/api/liblib';
     } else {
       // 生产环境使用CORS代理服务
-      // 使用多个备用代理服务
+      // 使用更可靠的代理服务
       this.corsProxyUrls = [
-        'https://cors-anywhere.herokuapp.com/',
         'https://api.allorigins.win/raw?url=',
         'https://cors.bridged.cc/',
-        'https://thingproxy.freeboard.io/fetch/'
+        'https://thingproxy.freeboard.io/fetch/',
+        'https://corsproxy.io/?'
       ];
-      this.corsProxyUrl = this.corsProxyUrls[0]; // 默认使用第一个
+      this.corsProxyUrl = this.corsProxyUrls[0]; // 默认使用allorigins
       this.baseUrl = 'https://openapi.liblibai.cloud';
     }
 
@@ -375,6 +375,8 @@ class LiblibService {
       // 根据不同的代理服务使用不同的URL格式
       if (this.corsProxyUrl.includes('allorigins.win')) {
         return `${this.corsProxyUrl}${encodeURIComponent(fullUrl)}`;
+      } else if (this.corsProxyUrl.includes('corsproxy.io')) {
+        return `${this.corsProxyUrl}${encodeURIComponent(fullUrl)}`;
       } else {
         // 对于其他代理服务，直接拼接
         return `${this.corsProxyUrl}${fullUrl}`;
@@ -382,6 +384,24 @@ class LiblibService {
     }
 
     return fullUrl;
+  }
+
+  // 切换到下一个CORS代理
+  switchToNextProxy() {
+    if (!this.isProduction || !this.corsProxyUrls) return false;
+
+    const currentIndex = this.corsProxyUrls.indexOf(this.corsProxyUrl);
+    const nextIndex = (currentIndex + 1) % this.corsProxyUrls.length;
+
+    if (nextIndex === 0) {
+      // 已经尝试了所有代理
+      console.error('🚫 所有CORS代理都已尝试，无法连接');
+      return false;
+    }
+
+    this.corsProxyUrl = this.corsProxyUrls[nextIndex];
+    console.log('🔄 切换到下一个CORS代理:', this.corsProxyUrl);
+    return true;
   }
 
   // 图生图功能（基于参考图像生成）
@@ -500,74 +520,90 @@ class LiblibService {
     return this.generateImageFromImage(defaultReferenceUrl, prompt, ageRange);
   }
 
-  // 提交图生图任务
-  async submitImageToImageTask(referenceImageUrl, prompt) {
-    const uri = this.imageToImageEndpoint; // 使用专用的img2img端点
-    const { signature, timestamp, signatureNonce } = await this.generateSignature(uri);
-    const { accessKey } = this.getApiKeys();
+  // 提交图生图任务（支持代理重试）
+  async submitImageToImageTask(referenceImageUrl, prompt, retryCount = 0) {
+    const maxRetries = this.isProduction ? this.corsProxyUrls?.length || 1 : 1;
 
-    // 使用新的URL构建方法（支持CORS代理）
-    const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
-
-    const requestBody = {
-      templateUuid: this.img2imgTemplateUuid, // 使用图生图专用模板UUID
-      generateParams: {
-        prompt: prompt,
-        sourceImage: referenceImageUrl, // 图生图必需的参考图片URL
-        imgCount: 1,           // 必填参数：生成图片数量
-        steps: 30              // 推荐的采样步数
-        // 注意：根据官方文档，img2img API的controlnet参数是可选的
-        // 先移除controlnet参数，使用基础的图生图功能
-      }
-    };
-
-    console.log('🔗 Image2Image请求URL:', url);
-    console.log('📤 Image2Image请求体:', JSON.stringify(requestBody, null, 2));
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    console.log('📥 Image2Image响应状态:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Image2Image错误响应:', errorText);
-      try {
-        const error = JSON.parse(errorText);
-        throw new Error(`提交图生图任务失败: ${error.msg || error.message || '未知错误'}`);
-      } catch (parseError) {
-        throw new Error(`提交图生图任务失败: HTTP ${response.status} - ${errorText}`);
-      }
-    }
-
-    const responseText = await response.text();
-    console.log('📥 Image2Image响应内容:', responseText);
-
-    let data;
     try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      throw new Error(`Image2Image响应解析失败: ${responseText}`);
-    }
+      const uri = this.imageToImageEndpoint; // 使用专用的img2img端点
+      const { signature, timestamp, signatureNonce } = await this.generateSignature(uri);
+      const { accessKey } = this.getApiKeys();
 
-    console.log('📊 Image2Image解析后的数据:', JSON.stringify(data, null, 2));
+      // 使用新的URL构建方法（支持CORS代理）
+      const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
 
-    // 根据LIBLIB API的实际响应格式处理结果
-    if (data.code === 0 && data.data && data.data.generateUuid) {
-      const taskId = data.data.generateUuid;
-      console.log('✅ 获取到Image2Image任务ID:', taskId);
-      return taskId;
-    } else if (data.generateUuid) {
-      // 直接返回generateUuid的情况
-      console.log('✅ 获取到Image2Image任务ID:', data.generateUuid);
-      return data.generateUuid;
-    } else {
-      throw new Error(`Image2Image API返回数据中缺少任务ID。响应数据: ${JSON.stringify(data)}`);
+      const requestBody = {
+        templateUuid: this.img2imgTemplateUuid, // 使用图生图专用模板UUID
+        generateParams: {
+          prompt: prompt,
+          sourceImage: referenceImageUrl, // 图生图必需的参考图片URL
+          imgCount: 1,           // 必填参数：生成图片数量
+          steps: 30              // 推荐的采样步数
+          // 注意：根据官方文档，img2img API的controlnet参数是可选的
+          // 先移除controlnet参数，使用基础的图生图功能
+        }
+      };
+
+      console.log('🔗 Image2Image请求URL:', url);
+      console.log('📤 Image2Image请求体:', JSON.stringify(requestBody, null, 2));
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('📥 Image2Image响应状态:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Image2Image错误响应:', errorText);
+
+        // 如果是403错误且在生产环境，尝试切换代理
+        if (response.status === 403 && this.isProduction && retryCount < maxRetries - 1) {
+          console.warn('🔄 检测到403错误，尝试切换CORS代理...');
+          if (this.switchToNextProxy()) {
+            return this.submitImageToImageTask(referenceImageUrl, prompt, retryCount + 1);
+          }
+        }
+
+        try {
+          const error = JSON.parse(errorText);
+          throw new Error(`提交图生图任务失败: ${error.msg || error.message || '未知错误'}`);
+        } catch (parseError) {
+          throw new Error(`提交图生图任务失败: HTTP ${response.status} - ${errorText}`);
+        }
+      }
+
+      const responseText = await response.text();
+      console.log('📥 Image2Image响应内容:', responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(`Image2Image响应解析失败: ${responseText}`);
+      }
+
+      console.log('📊 Image2Image解析后的数据:', JSON.stringify(data, null, 2));
+
+      // 根据LIBLIB API的实际响应格式处理结果
+      if (data.code === 0 && data.data && data.data.generateUuid) {
+        const taskId = data.data.generateUuid;
+        console.log('✅ 获取到Image2Image任务ID:', taskId);
+        return taskId;
+      } else if (data.generateUuid) {
+        // 直接返回generateUuid的情况
+        console.log('✅ 获取到Image2Image任务ID:', data.generateUuid);
+        return data.generateUuid;
+      } else {
+        throw new Error(`Image2Image API返回数据中缺少任务ID。响应数据: ${JSON.stringify(data)}`);
+      }
+    } catch (error) {
+      console.error('❌ 图生图任务提交失败:', error);
+      throw error;
     }
   }
 
