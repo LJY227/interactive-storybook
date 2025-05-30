@@ -12,16 +12,16 @@ class LiblibService {
     if (import.meta.env.DEV) {
       this.baseUrl = '/api/liblib';
     } else {
-      // 生产环境使用CORS代理服务
-      // 使用更可靠的代理服务
+      // 生产环境：尝试直接调用API，如果失败则使用备用方案
       this.corsProxyUrls = [
-        'https://api.allorigins.win/raw?url=',
-        'https://cors.bridged.cc/',
-        'https://thingproxy.freeboard.io/fetch/',
-        'https://corsproxy.io/?'
+        null, // 首先尝试直接调用
+        'https://cors-anywhere.herokuapp.com/',
+        'https://thingproxy.freeboard.io/fetch/'
       ];
-      this.corsProxyUrl = this.corsProxyUrls[0]; // 默认使用allorigins
+      this.corsProxyIndex = 0;
+      this.corsProxyUrl = this.corsProxyUrls[this.corsProxyIndex];
       this.baseUrl = 'https://openapi.liblibai.cloud';
+      console.log('🌐 生产环境：首先尝试直接调用API');
     }
 
     this.textToImageEndpoint = '/api/generate/webui/text2img/ultra';
@@ -373,16 +373,22 @@ class LiblibService {
       console.log('🌐 使用CORS代理:', this.corsProxyUrl);
 
       // 根据不同的代理服务使用不同的URL格式
-      if (this.corsProxyUrl.includes('allorigins.win')) {
-        return `${this.corsProxyUrl}${encodeURIComponent(fullUrl)}`;
-      } else if (this.corsProxyUrl.includes('corsproxy.io')) {
-        return `${this.corsProxyUrl}${encodeURIComponent(fullUrl)}`;
+      if (this.corsProxyUrl.includes('cors-anywhere')) {
+        // cors-anywhere 直接拼接
+        return `${this.corsProxyUrl}${fullUrl}`;
+      } else if (this.corsProxyUrl.includes('thingproxy')) {
+        // thingproxy 直接拼接
+        return `${this.corsProxyUrl}${fullUrl}`;
       } else {
-        // 对于其他代理服务，直接拼接
+        // 默认直接拼接
         return `${this.corsProxyUrl}${fullUrl}`;
       }
     }
 
+    // 直接调用或开发环境
+    if (this.isProduction && this.corsProxyUrl === null) {
+      console.log('🌐 生产环境：直接调用API');
+    }
     return fullUrl;
   }
 
@@ -390,17 +396,20 @@ class LiblibService {
   switchToNextProxy() {
     if (!this.isProduction || !this.corsProxyUrls) return false;
 
-    const currentIndex = this.corsProxyUrls.indexOf(this.corsProxyUrl);
-    const nextIndex = (currentIndex + 1) % this.corsProxyUrls.length;
+    this.corsProxyIndex = (this.corsProxyIndex + 1) % this.corsProxyUrls.length;
 
-    if (nextIndex === 0) {
+    if (this.corsProxyIndex === 0) {
       // 已经尝试了所有代理
-      console.error('🚫 所有CORS代理都已尝试，无法连接');
+      console.error('🚫 所有代理方案都已尝试，无法连接');
       return false;
     }
 
-    this.corsProxyUrl = this.corsProxyUrls[nextIndex];
-    console.log('🔄 切换到下一个CORS代理:', this.corsProxyUrl);
+    this.corsProxyUrl = this.corsProxyUrls[this.corsProxyIndex];
+    if (this.corsProxyUrl === null) {
+      console.log('🔄 切换到直接调用API');
+    } else {
+      console.log('🔄 切换到CORS代理:', this.corsProxyUrl);
+    }
     return true;
   }
 
@@ -520,9 +529,8 @@ class LiblibService {
     return this.generateImageFromImage(defaultReferenceUrl, prompt, ageRange);
   }
 
-  // 提交图生图任务（支持代理重试）
-  async submitImageToImageTask(referenceImageUrl, prompt, retryCount = 0) {
-    const maxRetries = this.isProduction ? this.corsProxyUrls?.length || 1 : 1;
+  // 提交图生图任务
+  async submitImageToImageTask(referenceImageUrl, prompt) {
 
     try {
       const uri = this.imageToImageEndpoint; // 使用专用的img2img端点
@@ -532,27 +540,38 @@ class LiblibService {
       // 使用新的URL构建方法（支持CORS代理）
       const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
 
+      // 尝试不同的请求体结构，基于LibLibAI API的实际要求
       const requestBody = {
-        templateUuid: this.img2imgTemplateUuid, // 使用图生图专用模板UUID
+        templateUuid: this.img2imgTemplateUuid,
         generateParams: {
           prompt: prompt,
-          sourceImage: referenceImageUrl, // 图生图必需的参考图片URL
-          imgCount: 1,           // 必填参数：生成图片数量
-          steps: 30              // 推荐的采样步数
-          // 注意：根据官方文档，img2img API的controlnet参数是可选的
-          // 先移除controlnet参数，使用基础的图生图功能
+          sourceImage: referenceImageUrl,
+          aspectRatio: "square",
+          imgCount: 1,
+          steps: 30
         }
       };
 
+      // 使用标准的嵌套结构
+      const finalRequestBody = requestBody;
+
       console.log('🔗 Image2Image请求URL:', url);
-      console.log('📤 Image2Image请求体:', JSON.stringify(requestBody, null, 2));
+      console.log('📤 Image2Image请求体:', JSON.stringify(finalRequestBody, null, 2));
+      console.log('🌍 当前环境:', import.meta.env.DEV ? '开发环境' : '生产环境');
+      console.log('🔑 API密钥状态:', {
+        hasAccessKey: !!accessKey,
+        accessKeyPrefix: accessKey ? accessKey.substring(0, 8) + '...' : '无',
+        templateUuid: this.img2imgTemplateUuid,
+        referenceImageUrl: referenceImageUrl
+      });
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(finalRequestBody)
       });
 
       console.log('📥 Image2Image响应状态:', response.status);
@@ -561,9 +580,9 @@ class LiblibService {
         const errorText = await response.text();
         console.error('❌ Image2Image错误响应:', errorText);
 
-        // 如果是403错误且在生产环境，尝试切换代理
-        if (response.status === 403 && this.isProduction && retryCount < maxRetries - 1) {
-          console.warn('🔄 检测到403错误，尝试切换CORS代理...');
+        // 如果是CORS相关错误或403错误，尝试切换代理
+        if ((response.status === 403 || response.status === 0) && this.isProduction && retryCount < maxRetries - 1) {
+          console.warn('🔄 检测到CORS/403错误，尝试切换代理方案...');
           if (this.switchToNextProxy()) {
             return this.submitImageToImageTask(referenceImageUrl, prompt, retryCount + 1);
           }
@@ -571,7 +590,57 @@ class LiblibService {
 
         try {
           const error = JSON.parse(errorText);
-          throw new Error(`提交图生图任务失败: ${error.msg || error.message || '未知错误'}`);
+          // 检查是否是请求体缺失的错误，如果是，尝试备用请求体格式
+          if (error.msg && error.msg.includes('Required request body is missing')) {
+            console.warn('🔄 检测到请求体缺失错误，尝试备用请求体格式...');
+
+            // 尝试备用请求体格式（扁平化结构）
+            const retryRequestBody = {
+              templateUuid: this.img2imgTemplateUuid,
+              prompt: prompt,
+              sourceImage: referenceImageUrl,
+              aspectRatio: "square",
+              imgCount: 1,
+              steps: 30
+            };
+
+            console.log('🔄 重试请求体:', JSON.stringify(retryRequestBody, null, 2));
+
+            const retryResponse = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify(retryRequestBody)
+            });
+
+            if (retryResponse.ok) {
+              const retryResponseText = await retryResponse.text();
+              console.log('✅ 备用格式成功，响应:', retryResponseText);
+
+              let retryData;
+              try {
+                retryData = JSON.parse(retryResponseText);
+              } catch (parseError) {
+                throw new Error(`备用格式响应解析失败: ${retryResponseText}`);
+              }
+
+              if (retryData.code === 0 && retryData.data && retryData.data.generateUuid) {
+                return retryData.data.generateUuid;
+              } else if (retryData.generateUuid) {
+                return retryData.generateUuid;
+              } else {
+                throw new Error(`备用格式API返回数据中缺少任务ID。响应数据: ${JSON.stringify(retryData)}`);
+              }
+            } else {
+              const retryErrorText = await retryResponse.text();
+              console.error('❌ 备用格式也失败:', retryErrorText);
+            }
+
+            throw new Error(`Image2Image API请求体传输失败，已尝试多种格式。原始错误: ${error.msg}`);
+          }
+          throw new Error(`Image2Image API返回错误: ${error.msg || error.message || '未知错误'}`);
         } catch (parseError) {
           throw new Error(`提交图生图任务失败: HTTP ${response.status} - ${errorText}`);
         }
@@ -603,6 +672,16 @@ class LiblibService {
       }
     } catch (error) {
       console.error('❌ 图生图任务提交失败:', error);
+
+      // 如果是网络错误（CORS问题）且在生产环境，尝试切换代理
+      if ((error.message.includes('Failed to fetch') || error.name === 'TypeError')
+          && this.isProduction && retryCount < maxRetries - 1) {
+        console.warn('🔄 检测到网络错误，可能是CORS问题，尝试切换代理...');
+        if (this.switchToNextProxy()) {
+          return this.submitImageToImageTask(referenceImageUrl, prompt, retryCount + 1);
+        }
+      }
+
       throw error;
     }
   }
