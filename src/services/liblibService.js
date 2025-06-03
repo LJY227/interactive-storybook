@@ -171,13 +171,14 @@ class LiblibService {
     // 使用新的URL构建方法（支持CORS代理）
     const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
 
+    // 严格按照官方文档的标准请求体格式（text2image）
     const requestBody = {
-      templateUuid: this.templateUuid,
-      generateParams: {
-        prompt: prompt,
-        aspectRatio: "square",  // 使用官方预设：square (1:1, 1024*1024)
-        imgCount: 1,           // 必填参数：生成图片数量
-        steps: 30              // 推荐的采样步数
+      "templateUuid": this.templateUuid,
+      "generateParams": {
+        "prompt": prompt,
+        "promptMagic": 1,      // 官方文档中的参数
+        "imgCount": 1,         // 必填参数：生成图片数量
+        "steps": 30            // 推荐的采样步数
       }
     };
 
@@ -530,7 +531,8 @@ class LiblibService {
   }
 
   // 提交图生图任务
-  async submitImageToImageTask(referenceImageUrl, prompt) {
+  async submitImageToImageTask(referenceImageUrl, prompt, retryCount = 0) {
+    const maxRetries = this.isProduction ? this.corsProxyUrls?.length || 1 : 1;
 
     try {
       const uri = this.imageToImageEndpoint; // 使用专用的img2img端点
@@ -540,23 +542,22 @@ class LiblibService {
       // 使用新的URL构建方法（支持CORS代理）
       const url = this.buildRequestUrl(uri, accessKey, signature, timestamp, signatureNonce);
 
-      // 尝试不同的请求体结构，基于LibLibAI API的实际要求
+      // 严格按照官方文档的标准请求体格式
       const requestBody = {
-        templateUuid: this.img2imgTemplateUuid,
-        generateParams: {
-          prompt: prompt,
-          sourceImage: referenceImageUrl,
-          aspectRatio: "square",
-          imgCount: 1,
-          steps: 30
+        "templateUuid": this.img2imgTemplateUuid,
+        "generateParams": {
+          "prompt": prompt,
+          "promptMagic": 1,
+          "imgCount": 1,
+          "steps": 30,
+          "denoisingStrength": 0.5,
+          "sourceImage": referenceImageUrl
         }
       };
 
-      // 使用标准的嵌套结构
-      const finalRequestBody = requestBody;
+      console.log('📋 使用官方文档标准格式的请求体:', JSON.stringify(requestBody, null, 2));
 
       console.log('🔗 Image2Image请求URL:', url);
-      console.log('📤 Image2Image请求体:', JSON.stringify(finalRequestBody, null, 2));
       console.log('🌍 当前环境:', import.meta.env.DEV ? '开发环境' : '生产环境');
       console.log('🔑 API密钥状态:', {
         hasAccessKey: !!accessKey,
@@ -571,7 +572,7 @@ class LiblibService {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(finalRequestBody)
+        body: JSON.stringify(requestBody)
       });
 
       console.log('📥 Image2Image响应状态:', response.status);
@@ -594,14 +595,21 @@ class LiblibService {
           if (error.msg && error.msg.includes('Required request body is missing')) {
             console.warn('🔄 检测到请求体缺失错误，尝试备用请求体格式...');
 
-            // 尝试备用请求体格式（扁平化结构）
+            // 尝试备用请求体格式（添加controlnet参数，完全按照官方文档）
             const retryRequestBody = {
-              templateUuid: this.img2imgTemplateUuid,
-              prompt: prompt,
-              sourceImage: referenceImageUrl,
-              aspectRatio: "square",
-              imgCount: 1,
-              steps: 30
+              "templateUuid": this.img2imgTemplateUuid,
+              "generateParams": {
+                "prompt": prompt,
+                "promptMagic": 1,
+                "imgCount": 1,
+                "steps": 30,
+                "denoisingStrength": 0.5,
+                "sourceImage": referenceImageUrl,
+                "controlnet": {
+                  "controlType": "IPAdapter",
+                  "controlImage": referenceImageUrl
+                }
+              }
             };
 
             console.log('🔄 重试请求体:', JSON.stringify(retryRequestBody, null, 2));
